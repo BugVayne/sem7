@@ -1,0 +1,151 @@
+  Объявление переменных: явное
+  Преобразование типов: неявное
+  Присваивание: одноцелевое (a = b)
+  Область видимости: только подпрограммы
+  Маркер блока: явные ({ })
+  Условные операторы: if-then-else + switch-case
+  Перегрузка: отсутствует
+  Передача параметров: по ссылке
+  Объявление подпрограмм: в любом месте
+
+
+
+
+// Создание графа и наполнение его данными
+graph social_network = create_graph();
+
+// Добавление узлов (пользователей)
+node alice = add_node(social_network, "Alice");
+node bob = add_node(social_network, "Bob");
+node charlie = add_node(social_network, "Charlie");
+node diana = add_node(social_network, "Diana");
+
+// Добавление дуг (связей между пользователями)
+arc ab = add_arc(social_network, alice, bob, "friends");
+arc ac = add_arc(social_network, alice, charlie, "colleagues");
+arc bd = add_arc(social_network, bob, diana, "family");
+arc cd = add_arc(social_network, charlie, diana, "friends");
+
+// Проверка свойств графа
+write("Количество узлов: ", node_count(social_network));
+write("Количество дуг: ", arc_count(social_network));
+write("Плотность графа: ", graph_density(social_network));
+
+// Поиск пути между узлами с разными алгоритмами
+write("Выберите алгоритм поиска пути:");
+write("1 - Поиск в ширину (BFS)");
+write("2 - Поиск в глубину (DFS)");
+write("3 - Алгоритм Дейкстры");
+
+int algorithm_choice = read();
+
+// Использование switch-case для выбора алгоритма
+list<node> path;
+switch (algorithm_choice) {
+    case 1:
+        path = bfs_path(social_network, alice, diana);
+        write("Путь найден алгоритмом BFS:");
+        break;
+    case 2:
+        path = dfs_path(social_network, alice, diana);
+        write("Путь найден алгоритмом DFS:");
+        break;
+    case 3:
+        path = dijkstra_path(social_network, alice, diana);
+        write("Путь найден алгоритмом Дейкстры:");
+        break;
+    default:
+        write("Неверный выбор алгоритма");
+        return;
+}
+
+// Вывод найденного пути
+if (path != null) then {
+    for (int i = 0; i < length(path); i = i + 1) {
+        node current_node = path[i];
+        write("Узел ", i, ": ", get_node_name(current_node));
+    }
+} else {
+    write("Путь не найден");
+}
+
+// Анализ связности графа
+write("Проверка связности графа:");
+bool fully_connected = is_fully_connected(social_network);
+
+if (fully_connected) then{
+    write("Граф является связным");
+} else {
+    write("Граф не является связным");
+    
+    // Поиск компонент связности
+    list<graph> components = find_connected_components(social_network);
+    write("Найдено компонент связности: ", length(components));
+    
+    for (int i = 0; i < length(components); i = i + 1) {
+        write("Компонента ", i, " содержит ", node_count(components[i]), " узлов");
+    }
+}
+
+// Операции с весами дуг (если граф взвешенный)
+write("Добавление весов дугам:");
+set_arc_weight(ab, 2.5);
+set_arc_weight(ac, 1.0);
+set_arc_weight(bd, 3.0);
+set_arc_weight(cd, 2.0);
+
+// Поиск кратчайшего пути с учетом весов
+path = shortest_path(social_network, alice, diana);
+write("Кратчайший путь с учетом весов:");
+
+if (path != null) {
+    float total_weight = 0.0;
+    for (int i = 0; i < length(path) - 1; i = i + 1) {
+        node from = path[i];
+        node to = path[i + 1];
+        arc connection = find_arc(social_network, from, to);
+        float weight = get_arc_weight(connection);
+        total_weight = total_weight + weight;
+        write(get_node_name(from), " -> ", get_node_name(to), " (вес: ", weight, ")");
+    }
+    write("Общий вес пути: ", total_weight);
+}
+
+// Использование цикла until для повторных попыток
+int attempts = 0;
+bool path_found = false;
+
+until (path_found || attempts >= 3) {
+    write("Попытка найти альтернативный путь, попытка ", attempts + 1);
+    
+    // Удаляем случайную дугу и проверяем, остался ли граф связным
+    arc random_arc = get_random_arc(social_network);
+    remove_arc(social_network, random_arc);
+    
+    path_found = has_path(social_network, alice, diana);
+    
+    if (!path_found) {
+        write("После удаления дуги путь не существует. Восстанавливаем граф.");
+        add_arc(social_network, random_arc); // Восстанавливаем дугу
+    } else {
+        write("Альтернативный путь найден после удаления дуги");
+    }
+    
+    attempts = attempts + 1;
+}
+
+
+graph main() {
+    graph g = create_graph();
+
+    // Локальная подпрограмма
+    void add_edge(graph gr, node from, node to) { // Передача по ссылке
+        arc a = add_arc(gr, from, to);
+        write("Дуга добавлена");
+    }
+
+    node n1 = add_node(g);
+    node n2 = add_node(g);
+    add_edge(g, n1, n2); 
+    return g;
+}

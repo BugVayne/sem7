@@ -1,0 +1,16 @@
+
+graph main() {
+    graph g = create_graph();
+
+    // Локальная подпрограмма
+    void add_edge(ref graph gr, node from, node to) { // Передача по ссылке
+        arc a = add_arc(gr, from, to);
+        write("Дуга добавлена");
+    }
+
+    node n1 = add_node(g);
+    node n2 = add_node(g);
+    add_edge(g, n1, n2); // Изменения отражаются в g
+
+    return g;
+}

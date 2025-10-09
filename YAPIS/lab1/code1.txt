@@ -1,0 +1,16 @@
+// Явное объявление переменных
+graph g = create_graph();
+node n1 = add_node(g);
+node n2 = add_node(g);
+arc a1 = add_arc(g, n1, n2);
+
+// Неявное преобразование типов (например, node к int для ID)
+int node_id = n1; // Неявное преобразование
+
+// Операции с графами
+graph g2 = g + g; // Пример переопределения операции +
+bool connected = is_connected(g);
+
+// Встроенные функции
+write("Граф создан");
+write("ID узла: ", node_id);
