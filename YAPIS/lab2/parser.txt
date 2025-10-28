@@ -1,0 +1,176 @@
+program
+    : (globalDecl | funcDecl | procDecl)* EOF
+    ;
+
+globalDecl
+    : varDecl ';'
+    ;
+
+// Подпрограммы: функции (возвращают тип) и процедуры (void)
+funcDecl
+    : type ID '(' paramList? ')' block
+    ;
+
+procDecl
+    : 'void' ID '(' paramList? ')' block
+    ;
+
+// Параметры передаются по ссылке (по условию)
+paramList
+    : param (',' param)*
+    ;
+
+param
+    : 'ref' type ID
+    ;
+
+// Объявления переменных (явное)
+varDecl
+    : type varInit (',' varInit)*
+    ;
+
+varInit
+    : ID ('=' expression)?
+    ;
+
+// Типы, включая обобщённый list<type>
+type
+    : 'int'
+    | 'float'
+    | 'bool'
+    | 'string'
+    | 'node'
+    | 'arc'
+    | 'graph'
+    | 'void'          // разрешим для единой обработки, хотя процедуры отдельно
+    | 'list' '<' type '>'
+    ;
+
+// Блоки кода
+block
+    : '{' statement* '}'
+     ;
+
+statement
+    : varDecl ';'
+    | assignStmt ';'
+    | callStmt ';'
+    | ifStmt
+    | switchStmt
+    | untilStmt
+    | returnStmt ';'
+    | block
+    | 'write' '(' argList? ')' ';'     // специальная встроенная процедура
+    | 'read' '(' ')' ';'               // специальная встроенная функция-процедура-стейтмент
+    ;
+
+// Присваивание: одноцелевое (a = b)
+assignStmt
+    : lvalue '=' expression
+    ;
+
+// Вызов как оператор (без использования результата)
+callStmt
+    : callExpr
+    ;
+
+// If-then-else
+ifStmt
+    : 'if' '(' expression ')' 'then' statement ('else' statement)?
+    ;
+
+// Switch-case
+switchStmt
+    : 'switch' '(' expression ')' '{' switchCase+ switchDefault? '}'
+    ;
+
+switchCase
+    : 'case' literal ':' statement*
+    ;
+
+switchDefault
+    : 'default' ':' statement*
+    ;
+
+// Цикл until (условие в заголовке). Согласно примеру: until (cond) { ... }
+untilStmt
+    : 'until' '(' expression ')' block
+    ;
+
+// Возврат
+returnStmt
+    : 'return' expression?
+    ;
+
+// Выражения
+expression
+    : assignmentExpr
+    ;
+
+assignmentExpr
+    : logicalOrExpr                          // присваивание как оператор не разрешаем здесь
+    ;
+
+logicalOrExpr
+    : logicalAndExpr ( '||' logicalAndExpr )*
+    ;
+
+logicalAndExpr
+    : equalityExpr ( '&&' equalityExpr )*
+    ;
+
+equalityExpr
+    : relationalExpr ( ( '==' | '!=' ) relationalExpr )*
+    ;
+
+relationalExpr
+    : additiveExpr ( ( '<' | '<=' | '>' | '>=' ) additiveExpr )*
+    ;
+
+additiveExpr
+    : multiplicativeExpr ( ( '+' | '-' ) multiplicativeExpr )*
+    ;
+
+multiplicativeExpr
+    : unaryExpr ( ( '*' | '/' | '%' ) unaryExpr )*
+    ;
+
+unaryExpr
+    : ('!' | '+' | '-') unaryExpr
+    | postfixExpr
+    ;
+
+postfixExpr
+    : primaryExpr ( '[' expression ']' )*        // индексирование списка
+    ;
+
+primaryExpr
+    : literal
+    | '(' expression ')'
+    | lvalue
+    | callExpr
+    ;
+
+// lvalue: идентификатор, возможно с точечной навигацией в будущих расширениях.
+// Здесь оставим просто ID (и индексирование в postfixExpr).
+lvalue
+    : ID
+    ;
+
+// Вызов функции/процедуры
+callExpr
+    : ID '(' argList? ')'
+    ;
+
+argList
+    : expression (',' expression)*
+    ;
+
+// Литералы
+literal
+    : INT_LIT
+    | FLOAT_LIT
+    | BOOL_LIT
+    | STRING_LIT
+    | 'null'
+    ;

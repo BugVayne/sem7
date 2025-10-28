@@ -1,3 +1,5 @@
+import time
+
 import psycopg2
 from psycopg2.extras import DictCursor
 import logging
@@ -96,43 +98,63 @@ class DataService:
             raise
 
     def delete_document(self, file_path):
-        """Удаление документа по file_path и обновление статистики терминов"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    # Сначала получаем ID документа
-                    cur.execute("SELECT id FROM documents WHERE file_path = %s", (file_path,))
-                    result = cur.fetchone()
-                    if not result:
-                        return False
+        """Удаление документа по file_path с правильным обновлением статистики терминов"""
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        # Use lower isolation level and explicit locking
+                        cur.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
 
-                    doc_id = result[0]
+                        # Get document ID with lock
+                        cur.execute("SELECT id FROM documents WHERE file_path = %s FOR UPDATE", (file_path,))
+                        result = cur.fetchone()
+                        if not result:
+                            logger.info(f"Document not found, skipping deletion: {file_path}")
+                            return True  # Document already doesn't exist
 
-                    # Получаем все термины этого документа
-                    cur.execute("SELECT term FROM document_terms WHERE doc_id = %s", (doc_id,))
-                    terms = [row[0] for row in cur.fetchall()]
+                        doc_id = result[0]
 
-                    # Удаляем документ (каскадно удалит document_terms)
-                    cur.execute("DELETE FROM documents WHERE file_path = %s", (file_path,))
+                        # Get terms for this document BEFORE deletion
+                        cur.execute("SELECT term FROM document_terms WHERE doc_id = %s", (doc_id,))
+                        terms = [row[0] for row in cur.fetchall()]
+                        logger.info(f"Found {len(terms)} terms to update for document {file_path}")
 
-                    # Обновляем статистику терминов
-                    for term in terms:
-                        # Уменьшаем doc_count на 1
-                        cur.execute("""
-                            UPDATE terms 
-                            SET doc_count = doc_count - 1 
-                            WHERE term = %s
-                        """, (term,))
+                        # Delete document (cascades to document_terms)
+                        cur.execute("DELETE FROM documents WHERE file_path = %s", (file_path,))
 
-                        # Удаляем термины с doc_count = 0
-                        cur.execute("DELETE FROM terms WHERE doc_count <= 0")
+                        # Update term counts in alphabetical order to prevent deadlocks
+                        if terms:
+                            sorted_terms = sorted(terms)
+                            for term in sorted_terms:
+                                # Decrement document count for each term
+                                cur.execute("""
+                                    UPDATE terms 
+                                    SET doc_count = doc_count - 1 
+                                    WHERE term = %s
+                                """, (term,))
 
-                    conn.commit()
-                    return True
+                                # Check if update was successful
+                                if cur.rowcount == 0:
+                                    logger.warning(f"Term {term} not found in terms table during deletion")
 
-        except Exception as e:
-            logger.error(f"Ошибка удаления документа: {e}")
-            return False
+                            # Remove terms with zero or negative count
+                            cur.execute("DELETE FROM terms WHERE doc_count <= 0")
+                            zero_terms_deleted = cur.rowcount
+                            if zero_terms_deleted > 0:
+                                logger.info(f"Removed {zero_terms_deleted} terms with zero document count")
+
+                        conn.commit()
+                        logger.info(f"Successfully deleted document and updated terms: {file_path}")
+                        return True
+
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1} failed to delete {file_path}: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"All {max_retries} attempts failed to delete {file_path}: {e}")
+                    return False
+                time.sleep(0.5 * (attempt + 1))  # Backoff
 
     def get_document_by_path(self, file_path):
         """Получение документа по пути"""
@@ -166,24 +188,45 @@ class DataService:
             raise
 
     def add_document_terms(self, doc_id, term_frequencies):
-        """Добавление терминов документа"""
-        try:
-            with self.get_connection() as conn:
-                with conn.cursor() as cur:
-                    # Удаляем старые термины документа
-                    cur.execute("DELETE FROM document_terms WHERE doc_id = %s", (doc_id,))
+        """Добавление терминов документа с улучшенной обработкой конкурентности"""
+        if not term_frequencies:
+            return
 
-                    # Добавляем новые термины
-                    for term, freq in term_frequencies.items():
-                        cur.execute("""
-                            INSERT INTO document_terms (doc_id, term, frequency)
-                            VALUES (%s, %s, %s)
-                        """, (doc_id, term, freq))
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                with self.get_connection() as conn:
+                    with conn.cursor() as cur:
+                        # Use READ COMMITTED isolation level
+                        cur.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
 
-                    conn.commit()
-        except Exception as e:
-            logger.error(f"Ошибка добавления терминов документа: {e}")
-            raise
+                        # Delete existing terms in batches if there are many
+                        cur.execute("DELETE FROM document_terms WHERE doc_id = %s", (doc_id,))
+
+                        # Insert new terms in alphabetical order
+                        sorted_terms = sorted(term_frequencies.items())
+                        batch_size = 100
+                        for i in range(0, len(sorted_terms), batch_size):
+                            batch = sorted_terms[i:i + batch_size]
+                            values = [(doc_id, term, freq) for term, freq in batch]
+                            args = ','.join(cur.mogrify("(%s,%s,%s)", x).decode('utf-8') for x in values)
+                            cur.execute(f"""
+                                INSERT INTO document_terms (doc_id, term, frequency) 
+                                VALUES {args}
+                                ON CONFLICT (doc_id, term) 
+                                DO UPDATE SET frequency = EXCLUDED.frequency
+                            """)
+
+                        conn.commit()
+                        logger.debug(f"Successfully added {len(term_frequencies)} terms for document {doc_id}")
+                        return
+
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1} failed for document {doc_id}: {e}")
+                if attempt == max_retries - 1:
+                    logger.error(f"All {max_retries} attempts failed for document {doc_id}: {e}")
+                    raise
+                time.sleep(0.5 * (attempt + 1))
 
     def get_document_count(self):
         """Получение общего количества документов"""
@@ -259,67 +302,3 @@ class DataService:
             logger.error(f"Ошибка получения документа по ID {doc_id}: {e}")
             return None
 
-
-if __name__ == "__main__":
-    # Тестирование подключения к БД и основных операций
-    db_config = {
-        'dbname': 'search_system',
-        'user': 'postgres',
-        'password': '1234',
-        'host': 'localhost',
-        'port': '5432'
-    }
-
-    try:
-        data_service = DataService(db_config)
-        print("✅ База данных успешно инициализирована")
-
-        # Тест добавления документа
-        doc_id = data_service.add_document(
-            title="Test Document",
-            content="This is a test document for the search service.",
-            file_path="/test/path/document1.txt",
-            last_modified=1234567890.0,
-            doc_length=7
-        )
-        print(f"✅ Документ добавлен с ID: {doc_id}")
-
-        # Тест получения документа
-        doc = data_service.get_document_by_path("/test/path/document1.txt")
-        print(f"✅ Документ получен: {doc['title']}")
-
-        # Тест обновления статистики терминов
-        term_freq = {'test': 2, 'document': 1, 'search': 1}
-        data_service.update_term_stats(term_freq)
-        print("✅ Статистика терминов обновлена")
-
-        # Тест добавления терминов документа
-        data_service.add_document_terms(doc_id, term_freq)
-        print("✅ Термины документа добавлены")
-
-        # Проверяем статистику терминов перед удалением
-        test_count = data_service.get_term_doc_count('test')
-        print(f"✅ Doc count для 'test' до удаления: {test_count}")
-
-        # Тест получения количества документов
-        count = data_service.get_document_count()
-        print(f"✅ Количество документов: {count}")
-
-        # Тест получения средней длины
-        avg_len = data_service.get_avg_doc_length()
-        print(f"✅ Средняя длина документа: {avg_len}")
-
-        # Тест получения терминов документа
-        terms = data_service.get_document_terms(doc_id)
-        print(f"✅ Термины документа: {terms}")
-
-        # Тест удаления документа с обновлением статистики терминов
-        success = data_service.delete_document("/test/path/document1.txt")
-        print(f"✅ Документ удален: {success}")
-
-        # Проверяем статистику терминов после удаления
-        test_count_after = data_service.get_term_doc_count('test')
-        print(f"✅ Doc count для 'test' после удаления: {test_count_after}")
-
-    except Exception as e:
-        print(f"❌ Ошибка тестирования: {e}")

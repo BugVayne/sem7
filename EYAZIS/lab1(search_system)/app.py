@@ -4,14 +4,14 @@ from search_service import SearchService
 from file_watcher import FileWatcher
 import json
 from flask import Flask, request, jsonify, render_template, redirect, url_for, abort, send_file
-
+from werkzeug.utils import secure_filename
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
-
+# ✅ Fixed directory path
 DB_CONFIG = {
     'dbname': 'search_system',
     'user': 'postgres',
@@ -20,7 +20,8 @@ DB_CONFIG = {
     'port': '5432'
 }
 
-WATCH_DIRECTORY = './documents'
+# ✅ Fixed: use raw string for Windows paths
+WATCH_DIRECTORY = r"C:\ME\BSUIR\sem7\EYAZIS\lab1(search_system)\documents"
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
@@ -40,7 +41,6 @@ def inject_globals():
 @app.route('/')
 def index():
     """Главная страница с поиском"""
-    # Получаем статистику для главной страницы
     stats = {}
     if search_service:
         try:
@@ -67,7 +67,6 @@ def search():
         if not query:
             return render_template('search.html', error='Please enter a search query')
 
-        # Use the new search method with GPT fallback
         search_response = search_service.search_with_gpt_fallback(query, top_k)
 
         return render_template('search.html',
@@ -75,7 +74,6 @@ def search():
                                search_response=search_response,
                                results_count=len(search_response['results']))
 
-    # GET request - показать форму
     return render_template('search.html')
 
 
@@ -132,19 +130,44 @@ def upload():
             return render_template('upload.html', error='No file selected')
 
         if file and file.filename.endswith('.txt'):
-            # Сохраняем файл
-            file_path = os.path.join(WATCH_DIRECTORY, file.filename)
-            file.save(file_path)
+            try:
+                # Ensure directory exists
+                os.makedirs(WATCH_DIRECTORY, exist_ok=True)
 
-            # Индексируем файл
-            success = search_service.index_file(file_path)
+                # Create safe file path
+                filename = secure_filename(file.filename)
+                file_path = os.path.join(WATCH_DIRECTORY, filename)
 
-            if success:
+                # Check if file already exists
+                if os.path.exists(file_path):
+                    return render_template('upload.html',
+                                           error=f'File {filename} already exists')
+
+                # Save file
+                file.save(file_path)
+                logging.info(f"File saved to: {file_path}")
+
+                # Index file
+                success = search_service.index_file(file_path)
+
+                if success:
+                    return render_template('upload.html',
+                                           success=f'File {filename} successfully indexed')
+                else:
+                    # Clean up if indexing failed
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    return render_template('upload.html',
+                                           error=f'Failed to index file {filename}')
+
+            except Exception as e:
+                logging.error(f"Upload error: {e}")
+                # Clean up on error
+                file_path = os.path.join(WATCH_DIRECTORY, secure_filename(file.filename))
+                if os.path.exists(file_path):
+                    os.remove(file_path)
                 return render_template('upload.html',
-                                       success=f'File {file.filename} successfully indexed')
-            else:
-                return render_template('upload.html',
-                                       error=f'Failed to index file {file.filename}')
+                                       error=f'Error during upload: {str(e)}')
 
         else:
             return render_template('upload.html',
@@ -176,12 +199,10 @@ def serve_file(doc_id):
 
     file_path = doc['file_path']
 
-    # Проверяем существование файла
     if not os.path.exists(file_path):
         abort(404, description="File not found on disk")
 
     try:
-        # Отдаем файл как attachment, чтобы браузер предложил скачать
         return send_file(
             file_path,
             as_attachment=True,
@@ -202,22 +223,28 @@ def preview_file(doc_id):
     if not doc:
         abort(404, description="Document not found")
 
-    # Возвращаем содержимое документа из базы данных
     return render_template('preview.html',
                            doc=doc,
                            content=doc['content'])
 
+
 def init_directories():
     """Инициализация необходимых директорий"""
-    if not os.path.exists(WATCH_DIRECTORY):
-        os.makedirs(WATCH_DIRECTORY)
-        logging.info(f"Создана директория: {WATCH_DIRECTORY}")
+    try:
+        if not os.path.exists(WATCH_DIRECTORY):
+            os.makedirs(WATCH_DIRECTORY, exist_ok=True)
+            logging.info(f"Создана директория: {WATCH_DIRECTORY}")
 
-    # Создаем директорию для шаблонов
-    templates_dir = './templates'
-    if not os.path.exists(templates_dir):
-        os.makedirs(templates_dir)
-        logging.info(f"Создана директория: {templates_dir}")
+        # Test write permissions
+        test_file = os.path.join(WATCH_DIRECTORY, 'test_write.tmp')
+        with open(test_file, 'w') as f:
+            f.write('test')
+        os.remove(test_file)
+        logging.info(f"Directory {WATCH_DIRECTORY} is writable")
+
+    except Exception as e:
+        logging.error(f"Directory error: {e}")
+        raise
 
 
 def init_services():
@@ -226,12 +253,10 @@ def init_services():
 
     try:
         search_service = SearchService(DB_CONFIG)
-        file_watcher = FileWatcher(WATCH_DIRECTORY, search_service)
+        file_watcher = FileWatcher(WATCH_DIRECTORY, search_service, debounce_seconds=2.0)
 
-        # Сканирование существующих файлов
         file_watcher.scan_existing_files()
 
-        # Запуск мониторинга
         file_watcher.start()
         logging.info("Сервисы успешно инициализированы")
 
@@ -241,14 +266,10 @@ def init_services():
 
 
 if __name__ == '__main__':
-    # Инициализация директорий
     init_directories()
-
-    # Инициализация сервисов
     init_services()
 
     try:
-        # Запуск Flask приложения
         app.run(host='0.0.0.0', port=5001, debug=True)
     except KeyboardInterrupt:
         if file_watcher:

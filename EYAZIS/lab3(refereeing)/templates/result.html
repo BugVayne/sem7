@@ -1,0 +1,256 @@
+<!-- templates/result.html (ОБНОВЛЕННАЯ ВЕРСИЯ) -->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Результаты реферирования</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .summary-card {
+            border-left: 4px solid #0d6efd;
+        }
+        .keyword-badge {
+            margin: 2px;
+            font-size: 0.9em;
+        }
+        .text-preview {
+            max-height: 200px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .full-text-modal {
+            max-height: 80vh;
+        }
+        .full-text-content {
+            max-height: 60vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .card {
+                border: 1px solid #000 !important;
+            }
+            .summary-card {
+                border-left: 4px solid #000 !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="row">
+            <div class="col-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>Результаты реферирования</h1>
+                    <div class="no-print">
+                        {% if from_history %}
+                            <a href="{{ url_for('history_page') }}" class="btn btn-outline-primary">
+                                ← К истории
+                            </a>
+                        {% else %}
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                                📄 Новый документ
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Информация о файле -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Информация о документе</h5>
+                        <div class="no-print">
+                            <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
+                                🖨️ Печать
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Файл:</strong> {{ result.filename }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Размер:</strong> {{ "%.2f"|format(result.file_size / 1024) }} KB
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Язык:</strong>
+                                {% if result.language == 'ru' %}Русский{% else %}Английский{% endif %}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Сжатие:</strong> {{ result.compression_ratio }}%
+                            </div>
+                        </div>
+                        {% if result.upload_time %}
+                        <div class="row mt-2">
+                            <div class="col-12">
+                                <strong>Время обработки:</strong> {{ result.upload_time }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Предпросмотр исходного текста -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Исходный текст (предпросмотр)</h5>
+                        <div class="no-print">
+                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#fullTextModal">
+                                📖 Открыть полный текст
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-preview">
+                            {{ result.original_text_preview }}
+                        </div>
+                        {% if result.original_length > 500 %}
+                        <div class="mt-2 text-muted">
+                            <small>Показано 500 из {{ result.original_length }} символов</small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Классический реферат -->
+                <div class="card mb-4 summary-card">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">📝 Классический реферат</h5>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">{{ result.classic_summary }}</p>
+                        <div class="mt-3 text-muted">
+                            <small>Длина реферата: {{ result.summary_length }} символов</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ключевые слова -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">🔑 Ключевые слова</h5>
+                    </div>
+                    <div class="card-body">
+                        {% for keyword in result.keyword_summary %}
+                            <span class="badge bg-primary keyword-badge">{{ keyword }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Кнопки скачивания -->
+                <div class="card no-print">
+                    <div class="card-header">
+                        <h5 class="mb-0">💾 Экспорт результатов</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="btn-group" role="group">
+                            <a href="{{ url_for('download_summary', format_type='txt', classic_summary=result.classic_summary, keywords=result.keyword_summary, text_id=result.text_id) }}"
+                               class="btn btn-outline-success">
+                                📄 Скачать как TXT
+                            </a>
+                            <a href="{{ url_for('download_summary', format_type='pdf', classic_summary=result.classic_summary, keywords=result.keyword_summary, text_id=result.text_id) }}"
+                               class="btn btn-outline-danger">
+                                📊 Скачать как PDF
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для полного текста -->
+    <div class="modal fade" id="fullTextModal" tabindex="-1" aria-labelledby="fullTextModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content full-text-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="fullTextModalLabel">Полный текст: {{ result.filename }}</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="full-text-content" id="fullTextContent">
+                        Загрузка...
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="printFullText()">🖨️ Печать текста</button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Загружаем полный текст при открытии модального окна
+        document.getElementById('fullTextModal').addEventListener('show.bs.modal', function () {
+            const textId = "{{ result.text_id }}";
+            if (textId) {
+                fetch(`/get_full_text/${textId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('fullTextContent').textContent = data.text;
+                        } else {
+                            document.getElementById('fullTextContent').textContent = 'Ошибка загрузки текста';
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        document.getElementById('fullTextContent').textContent = 'Ошибка загрузки текста';
+                    });
+            }
+        });
+
+        function printFullText() {
+            const textContent = document.getElementById('fullTextContent').textContent;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Полный текст: {{ result.filename }}</title>
+                        <style>
+                            body {
+                                font-family: 'Courier New', monospace;
+                                line-height: 1.6;
+                                white-space: pre-wrap;
+                                padding: 20px;
+                                max-width: 1000px;
+                                margin: 0 auto;
+                            }
+                            .header {
+                                text-align: center;
+                                margin-bottom: 20px;
+                                border-bottom: 2px solid #000;
+                                padding-bottom: 10px;
+                            }
+                        </style>
+                    </head>
+                    <body>
+                        <div class="header">
+                            <h2>Полный текст документа</h2>
+                            <h3>{{ result.filename }}</h3>
+                            <p>Длина: {{ result.original_length }} символов</p>
+                        </div>
+                        <div>${textContent}</div>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.focus();
+            printWindow.print();
+        }
+    </script>
+</body>
+</html>

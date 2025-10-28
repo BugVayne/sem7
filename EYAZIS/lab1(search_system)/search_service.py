@@ -286,8 +286,6 @@ class SearchService:
         }
 
 
-# ... (предыдущий код SearchService)
-
 if __name__ == "__main__":
     # Тестирование поискового сервиса
     db_config = {

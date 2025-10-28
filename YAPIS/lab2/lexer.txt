@@ -1,0 +1,90 @@
+// Ключевые слова
+IF          : 'if';
+THEN        : 'then';
+ELSE        : 'else';
+SWITCH      : 'switch';
+CASE        : 'case';
+DEFAULT     : 'default';
+UNTIL       : 'until';
+RETURN      : 'return';
+WRITE       : 'write';
+READ        : 'read';
+REF         : 'ref';
+
+INT         : 'int';
+FLOAT       : 'float';
+BOOL        : 'bool';
+STRING      : 'string';
+NODE        : 'node';
+ARC         : 'arc';
+GRAPH       : 'graph';
+VOID        : 'void';
+LIST        : 'list';
+
+// Операторы и знаки
+ASSIGN      : '=';
+PLUS        : '+';
+MINUS       : '-';
+STAR        : '*';
+SLASH       : '/';
+PERCENT     : '%';
+BANG        : '!';
+LT          : '<';
+LE          : '<=';
+GT          : '>';
+GE          : '>=';
+EQ          : '==';
+NEQ         : '!=';
+AND         : '&&';
+OR          : '||';
+
+LPAREN      : '(';
+RPAREN      : ')';
+LBRACE      : '{';
+RBRACE      : '}';
+LBRACK      : '[';
+RBRACK      : ']';
+COMMA       : ',';
+SEMI        : ';';
+COLON       : ':';
+LANGLE      : '<';
+RANGLE      : '>';
+
+// Идентификаторы
+ID
+    : [a-zA-Z_] [a-zA-Z_0-9]*
+    ;
+
+// Литералы
+BOOL_LIT
+    : 'true' | 'false'
+    ;
+
+INT_LIT
+    : [0-9]+
+    ;
+
+FLOAT_LIT
+    : [0-9]+ '.' [0-9]* ([eE] [+\-]? [0-9]+)?
+    | '.' [0-9]+ ([eE] [+\-]? [0-9]+)?
+    | [0-9]+ [eE] [+\-]? [0-9]+
+    ;
+
+// Строки в двойных кавычках с экранированием
+STRING_LIT
+    : '"' ( '\\' . | ~["\\] )* '"'
+    ;
+
+// Пробелы и новый строки
+WS
+    : [ \t\r\n]+ -> skip
+    ;
+
+// Комментарии: // ... и /* ... */
+LINE_COMMENT
+    : '//' ~[\r\n]* -> skip
+    ;
+
+BLOCK_COMMENT
+    : '/*' .*? '*/' -> skip
+    ;
