@@ -1,256 +1,567 @@
-<!-- templates/result.html (ОБНОВЛЕННАЯ ВЕРСИЯ) -->
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Результаты реферирования</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .summary-card {
-            border-left: 4px solid #0d6efd;
-        }
-        .keyword-badge {
-            margin: 2px;
-            font-size: 0.9em;
-        }
-        .text-preview {
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        .full-text-modal {
-            max-height: 80vh;
-        }
-        .full-text-content {
-            max-height: 60vh;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            font-family: 'Courier New', monospace;
-            background-color: #f8f9fa;
-            padding: 15px;
-            border-radius: 5px;
-        }
-        @media print {
-            .no-print {
-                display: none !important;
-            }
-            .card {
-                border: 1px solid #000 !important;
-            }
-            .summary-card {
-                border-left: 4px solid #000 !important;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container py-5">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1>Результаты реферирования</h1>
-                    <div class="no-print">
-                        {% if from_history %}
-                            <a href="{{ url_for('history_page') }}" class="btn btn-outline-primary">
-                                ← К истории
-                            </a>
-                        {% else %}
-                            <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
-                                📄 Новый документ
-                            </a>
-                        {% endif %}
+{% extends "base.html" %}
+
+{% block title %}Результаты реферирования - {{ result.filename }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Заголовок и навигация -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1"><i class="bi bi-file-text me-2"></i>Результаты реферирования</h1>
+                <p class="text-muted mb-0">Анализ документа: {{ result.filename }}</p>
+            </div>
+            <div class="btn-group no-print">
+                <a href="{{ url_for('history_page') }}" class="btn btn-outline-secondary">
+                    <i class="bi bi-clock-history me-1"></i>История
+                </a>
+                {% if from_history %}
+                    <a href="{{ url_for('history_page') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-arrow-left me-1"></i>К истории
+                    </a>
+                {% else %}
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-plus-circle me-1"></i>Новый документ
+                    </a>
+                {% endif %}
+                <button class="btn btn-outline-secondary" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>Печать
+                </button>
+            </div>
+        </div>
+
+
+        <!-- Информация о файле -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-info-circle me-2"></i>Информация о документе</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-2 mb-3">
+                        <strong><i class="bi bi-file-earmark me-1"></i>Файл:</strong><br>
+                        <span class="text-muted">{{ result.filename }}</span>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <strong><i class="bi bi-hdd me-1"></i>Размер:</strong><br>
+                        <span class="text-muted">{{ "%.2f"|format(result.file_size / 1024) }} KB</span>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <strong><i class="bi bi-translate me-1"></i>Язык:</strong><br>
+                        <span class="text-muted">
+                            {% if result.language == 'ru' %}Русский{% else %}Английский{% endif %}
+                        </span>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <strong><i class="bi bi-arrow-left-right me-1"></i>Степень сжатия:</strong><br>
+                        <span class="text-warning">Класс.: {{ result.compression_ratio }}%</span><br>
+                        <span class="text-primary">Семан.: {{ result.semantic_compression_ratio }}%</span>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <strong><i class="bi bi-clock me-1"></i>Обработан:</strong><br>
+                        <span class="text-muted">{{ result.upload_time }}</span>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <!-- Информация о файле -->
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Информация о документе</h5>
-                        <div class="no-print">
-                            <button class="btn btn-sm btn-outline-secondary" onclick="window.print()">
-                                🖨️ Печать
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <strong>Файл:</strong> {{ result.filename }}
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Размер:</strong> {{ "%.2f"|format(result.file_size / 1024) }} KB
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Язык:</strong>
-                                {% if result.language == 'ru' %}Русский{% else %}Английский{% endif %}
-                            </div>
-                            <div class="col-md-3">
-                                <strong>Сжатие:</strong> {{ result.compression_ratio }}%
-                            </div>
-                        </div>
-                        {% if result.upload_time %}
-                        <div class="row mt-2">
-                            <div class="col-12">
-                                <strong>Время обработки:</strong> {{ result.upload_time }}
-                            </div>
-                        </div>
-                        {% endif %}
-                    </div>
+        <!-- Предпросмотр исходного текста -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0"><i class="bi bi-eye me-2"></i>Исходный текст (предпросмотр)</h5>
+                <div class="no-print">
+                    <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#fullTextModal">
+                        <i class="bi bi-arrows-fullscreen me-1"></i>Полный текст
+                    </button>
                 </div>
-
-                <!-- Предпросмотр исходного текста -->
-                <div class="card mb-4">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0">Исходный текст (предпросмотр)</h5>
-                        <div class="no-print">
-                            <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#fullTextModal">
-                                📖 Открыть полный текст
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="text-preview">
-                            {{ result.original_text_preview }}
-                        </div>
-                        {% if result.original_length > 500 %}
-                        <div class="mt-2 text-muted">
-                            <small>Показано 500 из {{ result.original_length }} символов</small>
-                        </div>
-                        {% endif %}
-                    </div>
+            </div>
+            <div class="card-body">
+                <div class="text-preview bg-light p-3 rounded">
+                    {{ result.original_text_preview }}
                 </div>
+                {% if result.original_length > 500 %}
+                <div class="mt-2 text-muted">
+                    <small>Показано 500 из {{ result.original_length }} символов</small>
+                </div>
+                {% endif %}
+            </div>
+        </div>
 
-                <!-- Классический реферат -->
-                <div class="card mb-4 summary-card">
-                    <div class="card-header bg-light">
-                        <h5 class="mb-0">📝 Классический реферат</h5>
-                    </div>
-                    <div class="card-body">
-                        <p class="card-text">{{ result.classic_summary }}</p>
-                        <div class="mt-3 text-muted">
-                            <small>Длина реферата: {{ result.summary_length }} символов</small>
+        <!-- Семантический реферат -->
+        <div class="card border-0 shadow-sm mb-4 summary-card border-primary">
+            <div class="card-header bg-primary text-white py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-cpu me-2"></i>Семантический реферат (AI)
+                    </h5>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <div class="d-flex">
+                        <i class="bi bi-info-circle me-2 fs-5"></i>
+                        <div>
+                            <strong>Создан с использованием модели Llama 3.2</strong><br>
                         </div>
                     </div>
                 </div>
 
-                <!-- Ключевые слова -->
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">🔑 Ключевые слова</h5>
+                <div class="summary-content">
+                    <div class="semantic-summary-text">
+                        {{ result.semantic_summary }}
                     </div>
-                    <div class="card-body">
+                </div>
+
+                <div class="mt-4 p-3 bg-light rounded">
+                    <div class="row text-center">
+                        <div class="col-md-4">
+                            <small class="text-muted">Длина реферата</small>
+                            <div class="fw-bold text-primary fs-5">{{ result.semantic_summary_length }} симв.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Степень сжатия</small>
+                            <div class="fw-bold text-success fs-5">{{ result.semantic_compression_ratio }}%</div>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">Экономия текста</small>
+                            <div class="fw-bold text-info fs-5">
+                                {{ (result.original_length - result.semantic_summary_length) }} симв.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Классический реферат -->
+        <div class="card border-0 shadow-sm mb-4 summary-card">
+            <div class="card-header bg-light py-3">
+                <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i>Классический реферат</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning mb-3">
+                    <div class="d-flex">
+                        <i class="bi bi-lightbulb me-2 fs-5"></i>
+                        <div>
+                            <strong>Статистический метод</strong><br>
+                            <small>Выделяет наиболее важные предложения на основе частоты ключевых слов и их распределения в тексте.</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="summary-content">
+                    {% if result.classic_summary_sentences %}
+                        <div class="summary-sentences">
+                            {% for sentence in result.classic_summary_sentences %}
+                                <div class="sentence-item mb-2">
+                                    <i class="bi bi-dot text-warning me-2"></i>
+                                    <span class="sentence-text">{{ sentence }}</span>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="classic-summary-text">
+                            {{ result.classic_summary }}
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="mt-3 text-muted">
+                    <small><i class="bi bi-rulers me-1"></i>Длина реферата: {{ result.summary_length }} символов</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Статистические ключевые слова - теперь на всю ширину -->
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-tags me-2 text-warning"></i>Ключевые слова (статистические)
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if result.keyword_summary %}
+                    <div class="keyword-list text-center">
                         {% for keyword in result.keyword_summary %}
-                            <span class="badge bg-primary keyword-badge">{{ keyword }}</span>
+                            <span class="keyword-badge keyword-classic mb-2">
+                                {{ keyword }}
+                            </span>
                         {% endfor %}
                     </div>
+                {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="bi bi-exclamation-circle fs-1 mb-2"></i>
+                        <p>Ключевые слова не найдены</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Ключевые моменты -->
+        {% if result.key_points %}
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check me-2 text-success"></i>Ключевые моменты
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="key-points-list">
+                    {% for point in result.key_points %}
+                    <div class="key-point-item mb-2 p-2 border-start border-success border-3">
+                        <div class="d-flex align-items-start">
+                            <i class="bi bi-check-circle text-success me-2 mt-1"></i>
+                            <span>{{ point }}</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Сравнение методов -->
+        <div class="card border-0 shadow-sm mb-4 no-print">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Сравнение методов реферирования</h5>
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="text-muted">Исходный текст</h6>
+                            <h3 class="text-dark">{{ result.original_length }}</h3>
+                            <small class="text-muted">символов</small>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3 h-100 bg-warning bg-opacity-10">
+                            <h6 class="text-warning">Классический метод</h6>
+                            <h3 class="text-warning">{{ result.summary_length }}</h3>
+                            <small class="text-muted">символов</small>
+                            <div class="mt-2">
+                                <span class="badge bg-warning">Сжатие: {{ result.compression_ratio }}%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <div class="border rounded p-3 h-100 bg-primary bg-opacity-10">
+                            <h6 class="text-primary">Семантический метод</h6>
+                            <h3 class="text-primary">{{ result.semantic_summary_length }}</h3>
+                            <small class="text-muted">символов</small>
+                            <div class="mt-2">
+                                <span class="badge bg-primary">Сжатие: {{ result.semantic_compression_ratio }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
-                <!-- Кнопки скачивания -->
-                <div class="card no-print">
-                    <div class="card-header">
-                        <h5 class="mb-0">💾 Экспорт результатов</h5>
+                <!-- Визуализация сравнения -->
+                <div class="mt-4">
+                    <h6 class="text-center mb-3">Визуальное сравнение длины текстов</h6>
+                    <div class="progress-container">
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Исходный текст</small>
+                            <small>{{ result.original_length }} симв.</small>
+                        </div>
+                        <div class="progress mb-3" style="height: 20px;">
+                            <div class="progress-bar bg-dark" style="width: 100%"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Классический реферат</small>
+                            <small>{{ result.summary_length }} симв. ({{ result.compression_ratio }}%)</small>
+                        </div>
+                        <div class="progress mb-3" style="height: 20px;">
+                            <div class="progress-bar bg-warning"
+                                 style="width: {{ 100 - result.compression_ratio }}%"></div>
+                        </div>
+
+                        <div class="d-flex justify-content-between mb-1">
+                            <small>Семантический реферат</small>
+                            <small>{{ result.semantic_summary_length }} симв. ({{ result.semantic_compression_ratio }}%)</small>
+                        </div>
+                        <div class="progress mb-3" style="height: 20px;">
+                            <div class="progress-bar bg-primary"
+                                 style="width: {{ 100 - result.semantic_compression_ratio }}%"></div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="btn-group" role="group">
-                            <a href="{{ url_for('download_summary', format_type='txt', classic_summary=result.classic_summary, keywords=result.keyword_summary, text_id=result.text_id) }}"
-                               class="btn btn-outline-success">
-                                📄 Скачать как TXT
+                </div>
+            </div>
+        </div>
+
+        <!-- Экспорт результатов -->
+        <div class="card border-0 shadow-sm no-print">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-download me-2"></i>Экспорт результатов</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <h6>Форматы экспорта</h6>
+                        <div class="btn-group-vertical w-100" role="group">
+                            <a href="{{ url_for('download_summary', format_type='txt', text_id=result.text_id) }}"
+                               class="btn btn-outline-success text-start">
+                                <i class="bi bi-file-earmark-text me-2"></i>Текстовый файл (TXT)
+                                <small class="d-block text-muted">Оба реферата и ключевые слова</small>
                             </a>
-                            <a href="{{ url_for('download_summary', format_type='pdf', classic_summary=result.classic_summary, keywords=result.keyword_summary, text_id=result.text_id) }}"
-                               class="btn btn-outline-danger">
-                                📊 Скачать как PDF
+                            <a href="{{ url_for('download_summary', format_type='pdf', text_id=result.text_id) }}"
+                               class="btn btn-outline-danger text-start mt-2">
+                                <i class="bi bi-file-earmark-pdf me-2"></i>PDF документ
+                                <small class="d-block text-muted">Форматированный отчет с результатами</small>
                             </a>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <h6>Быстрые действия</h6>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-outline-primary" onclick="copySemanticSummary()">
+                                <i class="bi bi-clipboard me-2"></i>Копировать семантический реферат
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="copyAllResults()">
+                                <i class="bi bi-clipboard-check me-2"></i>Копировать все результаты
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Модальное окно для полного текста -->
-    <div class="modal fade" id="fullTextModal" tabindex="-1" aria-labelledby="fullTextModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl">
-            <div class="modal-content full-text-modal">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="fullTextModalLabel">Полный текст: {{ result.filename }}</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+<!-- Модальное окно для полного текста -->
+<div class="modal fade" id="fullTextModal" tabindex="-1" aria-labelledby="fullTextModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="fullTextModalLabel">
+                    <i class="bi bi-file-text me-2"></i>Полный текст: {{ result.filename }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="full-text-content" id="fullTextContent"
+                     style="max-height: 60vh; overflow-y: auto; white-space: pre-wrap; font-family: 'Courier New', monospace; background-color: #f8f9fa; padding: 15px; border-radius: 5px;">
+                    Загрузка...
                 </div>
-                <div class="modal-body">
-                    <div class="full-text-content" id="fullTextContent">
-                        Загрузка...
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" onclick="printFullText()">🖨️ Печать текста</button>
-                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Закрыть</button>
-                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" onclick="printFullText()">
+                    <i class="bi bi-printer me-1"></i>Печать текста
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
             </div>
         </div>
     </div>
+</div>
+{% endblock %}
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Загружаем полный текст при открытии модального окна
-        document.getElementById('fullTextModal').addEventListener('show.bs.modal', function () {
-            const textId = "{{ result.text_id }}";
-            if (textId) {
-                fetch(`/get_full_text/${textId}`)
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            document.getElementById('fullTextContent').textContent = data.text;
-                        } else {
-                            document.getElementById('fullTextContent').textContent = 'Ошибка загрузки текста';
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
+{% block extra_css %}
+<style>
+    .summary-sentences {
+        line-height: 1.6;
+    }
+    .sentence-item {
+        padding: 0.5rem;
+        border-left: 3px solid transparent;
+        transition: all 0.2s ease;
+        border-radius: 0.25rem;
+    }
+    .sentence-item:hover {
+        background-color: #f8f9fa;
+        padding-left: 1rem;
+    }
+    .keyword-badge {
+        display: inline-block;
+        padding: 0.35em 0.65em;
+        margin: 0.25em;
+        border-radius: 0.75em;
+        font-weight: 500;
+        transition: all 0.2s ease;
+    }
+    .keyword-semantic {
+        background: linear-gradient(135deg, #007bff, #0056b3);
+        color: white;
+    }
+    .keyword-classic {
+        background: linear-gradient(135deg, #ffc107, #e0a800);
+        color: #212529;
+    }
+    .keyword-badge:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+    }
+    .keyword-list {
+        text-align: center;
+    }
+    .summary-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    .summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+    }
+    .key-point-item {
+        background-color: #f8fff8;
+        border-left: 4px solid #28a745 !important;
+    }
+    .analysis-content {
+        line-height: 1.7;
+        font-size: 1.05em;
+    }
+    .progress-container .progress {
+        border-radius: 10px;
+    }
+    .progress-bar {
+        border-radius: 10px;
+        transition: width 0.5s ease-in-out;
+    }
+    .semantic-summary-text,
+    .classic-summary-text {
+        line-height: 1.7;
+        font-size: 1.1em;
+        text-align: justify;
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Загружаем полный текст при открытии модального окна
+    document.getElementById('fullTextModal').addEventListener('show.bs.modal', function () {
+        const textId = "{{ result.text_id }}";
+        if (textId) {
+            fetch(`/get_full_text/${textId}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('fullTextContent').textContent = data.text;
+                    } else {
                         document.getElementById('fullTextContent').textContent = 'Ошибка загрузки текста';
-                    });
-            }
-        });
-
-        function printFullText() {
-            const textContent = document.getElementById('fullTextContent').textContent;
-            const printWindow = window.open('', '_blank');
-            printWindow.document.write(`
-                <html>
-                    <head>
-                        <title>Полный текст: {{ result.filename }}</title>
-                        <style>
-                            body {
-                                font-family: 'Courier New', monospace;
-                                line-height: 1.6;
-                                white-space: pre-wrap;
-                                padding: 20px;
-                                max-width: 1000px;
-                                margin: 0 auto;
-                            }
-                            .header {
-                                text-align: center;
-                                margin-bottom: 20px;
-                                border-bottom: 2px solid #000;
-                                padding-bottom: 10px;
-                            }
-                        </style>
-                    </head>
-                    <body>
-                        <div class="header">
-                            <h2>Полный текст документа</h2>
-                            <h3>{{ result.filename }}</h3>
-                            <p>Длина: {{ result.original_length }} символов</p>
-                        </div>
-                        <div>${textContent}</div>
-                    </body>
-                </html>
-            `);
-            printWindow.document.close();
-            printWindow.focus();
-            printWindow.print();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    document.getElementById('fullTextContent').textContent = 'Ошибка загрузки текста';
+                });
         }
-    </script>
-</body>
-</html>
+    });
+
+    function printFullText() {
+        const textContent = document.getElementById('fullTextContent').textContent;
+        const printWindow = window.open('', '_blank');
+        printWindow.document.write(`
+            <html>
+                <head>
+                    <title>Полный текст: {{ result.filename }}</title>
+                    <style>
+                        body {
+                            font-family: 'Courier New', monospace;
+                            line-height: 1.6;
+                            white-space: pre-wrap;
+                            padding: 20px;
+                            max-width: 1000px;
+                            margin: 0 auto;
+                        }
+                        .header {
+                            text-align: center;
+                            margin-bottom: 20px;
+                            border-bottom: 2px solid #000;
+                            padding-bottom: 10px;
+                        }
+                        @media print {
+                            body { font-size: 12pt; }
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <h2>Полный текст документа</h2>
+                        <h3>{{ result.filename }}</h3>
+                        <p>Длина: {{ result.original_length }} символов | Язык: {% if result.language == 'ru' %}Русский{% else %}Английский{% endif %}</p>
+                    </div>
+                    <div>${textContent}</div>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+        printWindow.focus();
+        printWindow.print();
+    }
+
+    function copySemanticSummary() {
+        const summaryText = `{{ result.semantic_summary }}`;
+        navigator.clipboard.writeText(summaryText).then(function() {
+            showToast('Семантический реферат скопирован в буфер обмена', 'success');
+        }, function() {
+            showToast('Ошибка копирования', 'error');
+        });
+    }
+
+    function copyAllResults() {
+        const allResults = `
+АВТОМАТИЧЕСКИЙ РЕФЕРАТ ДОКУМЕНТА
+Файл: {{ result.filename }}
+Язык: {% if result.language == 'ru' %}Русский{% else %}Английский{% endif %}
+Дата обработки: {{ result.upload_time }}
+
+СЕМАНТИЧЕСКИЙ РЕФЕРАТ (AI):
+{{ result.semantic_summary }}
+
+КЛАССИЧЕСКИЙ РЕФЕРАТ:
+{{ result.classic_summary }}
+
+КЛЮЧЕВЫЕ СЛОВА:
+Статистические: {{ result.keyword_summary|join(', ') }}
+
+СТАТИСТИКА:
+Исходный текст: {{ result.original_length }} символов
+Семантический реферат: {{ result.semantic_summary_length }} символов (сжатие: {{ result.semantic_compression_ratio }}%)
+Классический реферат: {{ result.summary_length }} символов (сжатие: {{ result.compression_ratio }}%)
+        `.trim();
+
+        navigator.clipboard.writeText(allResults).then(function() {
+            showToast('Все результаты скопированы в буфер обмена', 'success');
+        }, function() {
+            showToast('Ошибка копирования', 'error');
+        });
+    }
+
+    function showToast(message, type = 'info') {
+        // Создаем простое уведомление
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type} position-fixed`;
+        toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+        toast.innerHTML = `
+            <div class="d-flex justify-content-between">
+                <span>${message}</span>
+                <button type="button" class="btn-close" onclick="this.parentElement.parentElement.remove()"></button>
+            </div>
+        `;
+        document.body.appendChild(toast);
+
+        // Автоматическое удаление через 3 секунды
+        setTimeout(() => {
+            if (toast.parentElement) {
+                toast.remove();
+            }
+        }, 3000);
+    }
+
+    // Анимация появления элементов при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        const cards = document.querySelectorAll('.summary-card');
+        cards.forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(20px)';
+
+            setTimeout(() => {
+                card.style.transition = 'all 0.5s ease';
+                card.style.opacity = '1';
+                card.style.transform = 'translateY(0)';
+            }, index * 200);
+        });
+    });
+</script>
+{% endblock %}

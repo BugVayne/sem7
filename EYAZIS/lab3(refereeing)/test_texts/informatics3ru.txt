@@ -1,14 +1,7 @@
  
 
-АННОТАЦИЯ
-
 В данной статье проводится комплексный анализ влияния технологий искусственного интеллекта (ИИ) на фундаментальные принципы, парадигмы и практики в области информатики. Подробно исследуется историческая эволюция искусственного интеллекта, переход от классического алгоритмического подхода к парадигме. Анализируются ключевые аспекты трансформации: изменение роли разработчика, появление новых методологий проектирования программного обеспечения, революция в архитектуре вычислительных систем и фундаментальные сдвиги в кибербезопасности. В работе представлены результаты подробного эмпирического исследования, демонстрирующего эффективность использования инструмента на основе искусственного интеллекта для повышения продуктивности написания кода, снижения количества ошибок и его влияния на креативность разработчиков. Отдельно рассматриваются этические вызовы и будущие направления развития искусственного интеллекта в компьютерных науках.
 
-ABSTRACT
-
-This article provides a comprehensive analysis of the impact of artificial intelligence (AI) technologies on fundamental principles, paradigms and practices in the field of computer science. The historical evolution of artificial intelligence and the transition from the classical algorithmic approach to the paradigm are studied in detail. The key aspects of the transformation are analyzed: the changing role of the developer, the emergence of new software design methodologies, a revolution in the architecture of computing systems and fundamental shifts in cybersecurity. The paper presents the results of a detailed empirical study demonstrating the effectiveness of using an artificial intelligence-based tool to increase the productivity of writing code, reduce the number of errors and its impact on the creativity of developers. Ethical challenges and future directions of artificial intelligence development in computer science are considered separately.
-
- 
 
 Ключевые слова: искусственный интеллект, машинное обучение, глубокое обучение, информатика, разработка программного обеспечения, GitHub Copilot, продуктивность программирования, кибербезопасность, этика ИИ, архитектура вычислительных систем.
 

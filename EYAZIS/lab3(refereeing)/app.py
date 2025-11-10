@@ -1,14 +1,13 @@
-# app.py (ИСПРАВЛЕННАЯ ВЕРСИЯ)
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file, jsonify, session
 import os
 from werkzeug.utils import secure_filename
-import tempfile
 import io
 import json
 from datetime import datetime
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
 import uuid
+import re
 
 from file_processor import read_file
 from summarizer import TextSummarizer
@@ -20,12 +19,15 @@ app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 # Создаем временные папки
 UPLOAD_FOLDER = 'uploads'
 TEXT_STORAGE_FOLDER = 'text_storage'
+SUMMARY_STORAGE_FOLDER = 'summary_storage'
 HISTORY_FILE = 'summarization_history.json'
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(TEXT_STORAGE_FOLDER, exist_ok=True)
+os.makedirs(SUMMARY_STORAGE_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['TEXT_STORAGE_FOLDER'] = TEXT_STORAGE_FOLDER
+app.config['SUMMARY_STORAGE_FOLDER'] = SUMMARY_STORAGE_FOLDER
 
 # Инициализация суммаризатора
 summarizer = TextSummarizer()
@@ -37,6 +39,27 @@ ALLOWED_EXTENSIONS = {'txt'}
 def allowed_file(filename):
     return '.' in filename and \
         filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def split_summary_into_lines(summary_text, language='ru'):
+    """
+    Разбивает текст реферата на отдельные предложения для отображения с новой строки
+    """
+    if not summary_text:
+        return []
+
+    # Разбиваем текст на предложения
+    if language == 'ru':
+        # Для русского языка: разделители .!? с последующим пробелом или концом строки
+        sentences = re.split(r'(?<=[.!?])\s+', summary_text)
+    else:
+        # Для английского языка
+        sentences = re.split(r'(?<=[.!?])\s+', summary_text)
+
+    # Убираем пустые строки и лишние пробелы
+    sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
+
+    return sentences
 
 
 def load_history():
@@ -83,16 +106,51 @@ def load_text_from_file(text_id):
     return None
 
 
-def cleanup_old_text_files(hours=24):
+def save_summary_data(summary_id, classic_summary, semantic_summary, keyword_summary, semantic_keywords,
+                      semantic_analysis="", key_points=None):
+    """Сохраняет данные реферата в отдельный файл"""
+    try:
+        file_path = os.path.join(app.config['SUMMARY_STORAGE_FOLDER'], f"{summary_id}.json")
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                'classic_summary': classic_summary,
+                'semantic_summary': semantic_summary,
+                'keyword_summary': keyword_summary,
+                'semantic_keywords': semantic_keywords or [],
+                'semantic_analysis': semantic_analysis or "",
+                'key_points': key_points or []
+            }, f, ensure_ascii=False, indent=2)
+        return file_path
+    except Exception as e:
+        print(f"Error saving summary: {e}")
+        return None
+
+
+def load_summary_data(summary_id):
+    """Загружает данные реферата из файла"""
+    try:
+        file_path = os.path.join(app.config['SUMMARY_STORAGE_FOLDER'], f"{summary_id}.json")
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Error loading summary: {e}")
+    return None
+
+
+def cleanup_old_files(hours=24):
     """Очищает старые временные файлы"""
     try:
         current_time = datetime.now().timestamp()
-        for filename in os.listdir(app.config['TEXT_STORAGE_FOLDER']):
-            if filename.endswith('.txt'):
-                file_path = os.path.join(app.config['TEXT_STORAGE_FOLDER'], filename)
-                file_time = os.path.getctime(file_path)
-                if current_time - file_time > hours * 3600:  # 24 hours
-                    os.remove(file_path)
+        # Очищаем текстовые файлы
+        for folder in [app.config['TEXT_STORAGE_FOLDER'], app.config['SUMMARY_STORAGE_FOLDER']]:
+            for filename in os.listdir(folder):
+                if filename.endswith(('.txt', '.json')):
+                    file_path = os.path.join(folder, filename)
+                    if os.path.exists(file_path):
+                        file_time = os.path.getctime(file_path)
+                        if current_time - file_time > hours * 3600:
+                            os.remove(file_path)
     except Exception as e:
         print(f"Error cleaning up files: {e}")
 
@@ -109,24 +167,41 @@ def add_to_history(result_data):
     text_id = str(uuid.uuid4())
     save_text_to_file(result_data.get('full_text', ''), text_id)
 
+    # Сохраняем данные реферата в отдельный файл
+    summary_id = str(uuid.uuid4())
+    save_summary_data(
+        summary_id,
+        result_data.get('classic_summary', ''),
+        result_data.get('semantic_summary', ''),
+        result_data.get('keyword_summary', []),
+        result_data.get('semantic_keywords', []),
+        result_data.get('semantic_analysis', ''),
+        result_data.get('key_points', [])
+    )
+
     history.append({
         'id': len(history) + 1,
-        'text_id': text_id,  # ID для загрузки полного текста
+        'text_id': text_id,
+        'summary_id': summary_id,
         'timestamp': datetime.now().isoformat(),
         'filename': result_data.get('filename', ''),
         'language': result_data.get('language', ''),
         'original_length': result_data.get('original_length', 0),
         'summary_length': result_data.get('summary_length', 0),
+        'semantic_summary_length': result_data.get('semantic_summary_length', 0),
         'compression_ratio': result_data.get('compression_ratio', 0),
+        'semantic_compression_ratio': result_data.get('semantic_compression_ratio', 0),
         'classic_summary_preview': result_data.get('classic_summary', '')[:100] + '...' if len(
             result_data.get('classic_summary', '')) > 100 else result_data.get('classic_summary', ''),
+        'semantic_summary_preview': result_data.get('semantic_summary', '')[:100] + '...' if len(
+            result_data.get('semantic_summary', '')) > 100 else result_data.get('semantic_summary', ''),
         'keyword_count': len(result_data.get('keyword_summary', [])),
-        # Не сохраняем полный текст в историю JSON
+        'semantic_keyword_count': len(result_data.get('semantic_keywords', [])),
         'has_full_text': True
     })
 
     save_history(history)
-    cleanup_old_text_files()  # Очищаем старые файлы
+    cleanup_old_files()
 
 
 @app.route('/')
@@ -145,20 +220,23 @@ def help_page():
 def history_page():
     """Страница истории реферирования"""
     history = load_history()
+    # Сортируем историю по ID в обратном порядке (новые сверху)
+    history.sort(key=lambda x: x['id'], reverse=True)
     return render_template('history.html', history=history)
 
 
 @app.route('/history/clear', methods=['POST'])
 def clear_history():
     """Очистка истории"""
-    # Также очищаем все временные текстовые файлы
     try:
-        for filename in os.listdir(app.config['TEXT_STORAGE_FOLDER']):
-            if filename.endswith('.txt'):
-                file_path = os.path.join(app.config['TEXT_STORAGE_FOLDER'], filename)
-                os.remove(file_path)
+        for folder in [app.config['TEXT_STORAGE_FOLDER'], app.config['SUMMARY_STORAGE_FOLDER']]:
+            for filename in os.listdir(folder):
+                if filename.endswith(('.txt', '.json')):
+                    file_path = os.path.join(folder, filename)
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
     except Exception as e:
-        print(f"Error clearing text files: {e}")
+        print(f"Error clearing files: {e}")
 
     save_history([])
     flash('История очищена')
@@ -175,19 +253,58 @@ def view_history_item(history_id):
         # Загружаем полный текст из файла
         full_text = load_text_from_file(item.get('text_id', ''))
 
+        # Загружаем данные реферата из файла
+        summary_data = load_summary_data(item.get('summary_id', ''))
+
+        if summary_data:
+            classic_summary = summary_data.get('classic_summary', 'Нет данных')
+            semantic_summary = summary_data.get('semantic_summary', 'Нет данных')
+            keyword_summary = summary_data.get('keyword_summary', [])
+            semantic_keywords = summary_data.get('semantic_keywords', [])
+            semantic_analysis = summary_data.get('semantic_analysis', '')
+            key_points = summary_data.get('key_points', [])
+        else:
+            classic_summary = 'Данные реферата не найдены'
+            semantic_summary = 'Данные реферата не найдены'
+            keyword_summary = []
+            semantic_keywords = []
+            semantic_analysis = ''
+            key_points = []
+
+        # Разбиваем рефераты на предложения для отображения
+        classic_summary_sentences = split_summary_into_lines(classic_summary, item.get('language', 'ru'))
+        semantic_summary_sentences = split_summary_into_lines(semantic_summary, item.get('language', 'ru'))
+
+        # Вычисляем compression ratio если его нет в старых записях
+        original_length = item.get('original_length', 0)
+        semantic_summary_length = item.get('semantic_summary_length', len(semantic_summary))
+        semantic_compression_ratio = item.get('semantic_compression_ratio', 0)
+
+        # Если semantic_compression_ratio не был сохранен, вычисляем его
+        if semantic_compression_ratio == 0 and original_length > 0 and semantic_summary_length > 0:
+            semantic_compression_ratio = round((1 - semantic_summary_length / original_length) * 100, 2)
+
         result_data = {
             'filename': item.get('filename', ''),
             'language': item.get('language', ''),
-            'original_length': item.get('original_length', 0),
+            'original_length': original_length,
             'summary_length': item.get('summary_length', 0),
+            'semantic_summary_length': semantic_summary_length,
             'compression_ratio': item.get('compression_ratio', 0),
-            'classic_summary': item.get('classic_summary_preview', ''),
-            'keyword_summary': [],
-            'file_size': item.get('original_length', 0),  # Приблизительно
+            'semantic_compression_ratio': semantic_compression_ratio,
+            'classic_summary': classic_summary,
+            'classic_summary_sentences': classic_summary_sentences,
+            'semantic_summary': semantic_summary,
+            'semantic_summary_sentences': semantic_summary_sentences,
+            'keyword_summary': keyword_summary,
+            'semantic_keywords': semantic_keywords,
+            'semantic_analysis': semantic_analysis,
+            'key_points': key_points,
+            'file_size': item.get('original_length', 0),
             'original_text_preview': full_text[:500] + '...' if full_text and len(full_text) > 500 else full_text,
             'full_text': full_text,
             'upload_time': item.get('timestamp', ''),
-            'text_id': item.get('text_id', '')  # Для загрузки полного текста
+            'text_id': item.get('text_id', '')
         }
 
         return render_template('result.html', result=result_data, from_history=True)
@@ -201,13 +318,13 @@ def upload_file():
     """Обработка загруженного файла"""
     if 'file' not in request.files:
         flash('Файл не выбран')
-        return redirect(request.url)
+        return redirect(url_for('index'))
 
     file = request.files['file']
 
     if file.filename == '':
         flash('Файл не выбран')
-        return redirect(request.url)
+        return redirect(url_for('index'))
 
     if file and allowed_file(file.filename):
         try:
@@ -219,9 +336,23 @@ def upload_file():
             # Обрабатываем файл
             file_info = read_file(file_path)
 
-            # Генерируем реферат
+            # Показываем сообщение о начале обработки
+            flash('Начинаем обработку текста с использованием AI... Это может занять несколько минут.')
+
+            # Генерируем реферат с использованием всех методов
             summary_result = summarizer.create_summary(
                 file_info['text'],
+                file_info['language']
+            )
+
+            # Разбиваем рефераты на предложения для отображения
+            classic_summary_sentences = split_summary_into_lines(
+                summary_result.get('classic_summary', ''),
+                file_info['language']
+            )
+
+            semantic_summary_sentences = split_summary_into_lines(
+                summary_result.get('semantic_summary', ''),
                 file_info['language']
             )
 
@@ -232,7 +363,9 @@ def upload_file():
                 file_info['text']) > 500 else file_info['text']
             summary_result['full_text'] = file_info['text']
             summary_result['upload_time'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            summary_result['text_id'] = str(uuid.uuid4())  # ID для загрузки полного текста
+            summary_result['text_id'] = str(uuid.uuid4())
+            summary_result['classic_summary_sentences'] = classic_summary_sentences
+            summary_result['semantic_summary_sentences'] = semantic_summary_sentences
 
             # Сохраняем полный текст в отдельный файл
             save_text_to_file(file_info['text'], summary_result['text_id'])
@@ -241,8 +374,10 @@ def upload_file():
             add_to_history(summary_result)
 
             # Удаляем временный файл
-            os.remove(file_path)
+            if os.path.exists(file_path):
+                os.remove(file_path)
 
+            flash('Обработка завершена успешно!')
             return render_template('result.html', result=summary_result)
 
         except Exception as e:
@@ -258,11 +393,11 @@ def upload_file():
 def view_full_text():
     """Просмотр полного текста исходного документа"""
     text_id = request.args.get('text_id', '')
+    filename = request.args.get('filename', 'document.txt')
 
     if text_id:
         full_text = load_text_from_file(text_id)
         if full_text:
-            filename = request.args.get('filename', 'document.txt')
             return render_template('full_text.html', full_text=full_text, filename=filename)
 
     flash('Текст не найден')
@@ -283,25 +418,52 @@ def get_full_text(text_id):
 def download_summary(format_type):
     """Скачивание результатов в выбранном формате"""
     try:
-        classic_summary = request.args.get('classic_summary', '')
         text_id = request.args.get('text_id', '')
 
-        # Загружаем полный текст для PDF, если нужно
-        full_text = ""
-        if text_id:
-            full_text = load_text_from_file(text_id)
+        if not text_id:
+            flash('ID текста не указан')
+            return redirect(url_for('index'))
+
+        # Загружаем данные реферата из истории или временного хранилища
+        summary_data = None
+
+        # Сначала ищем в истории
+        history = load_history()
+        for item in history:
+            if item.get('text_id') == text_id:
+                summary_data = load_summary_data(item.get('summary_id', ''))
+                break
+
+        if not summary_data:
+            flash('Данные реферата не найдены')
+            return redirect(url_for('index'))
+
+        classic_summary = summary_data.get('classic_summary', '')
+        semantic_summary = summary_data.get('semantic_summary', '')
+        keyword_summary = summary_data.get('keyword_summary', [])
+        semantic_keywords = summary_data.get('semantic_keywords', [])
 
         if format_type == 'txt':
-            # Создаем временный TXT файл
             output = io.StringIO()
             output.write("АВТОМАТИЧЕСКИЙ РЕФЕРАТ ДОКУМЕНТА\n")
             output.write("=" * 50 + "\n\n")
-            output.write("КЛАССИЧЕСКИЙ РЕФЕРАТ:\n")
-            output.write(classic_summary + "\n\n")
 
-            keywords = request.args.get('keywords', '[]')
-            output.write("КЛЮЧЕВЫЕ СЛОВА:\n")
-            output.write(", ".join(eval(keywords)) + "\n")
+            output.write("СЕМАНТИЧЕСКИЙ РЕФЕРАТ (AI):\n\n")
+            semantic_sentences = split_summary_into_lines(semantic_summary)
+            for sentence in semantic_sentences:
+                output.write(f"• {sentence}\n")
+
+            output.write("\n" + "=" * 50 + "\n\n")
+            output.write("КЛАССИЧЕСКИЙ РЕФЕРАТ:\n\n")
+            classic_sentences = split_summary_into_lines(classic_summary)
+            for sentence in classic_sentences:
+                output.write(f"• {sentence}\n")
+
+            output.write("\nКЛЮЧЕВЫЕ СЛОВА:\n")
+            output.write("Семантические: " + ", ".join(semantic_keywords) + "\n")
+            output.write("Статистические: " + ", ".join(keyword_summary) + "\n\n")
+            output.write("=" * 50 + "\n")
+            output.write(f"Сгенерировано: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
             mem = io.BytesIO()
             mem.write(output.getvalue().encode('utf-8'))
@@ -319,48 +481,92 @@ def download_summary(format_type):
             mem = io.BytesIO()
             p = canvas.Canvas(mem, pagesize=A4)
 
-            # Простой PDF с результатами
             y_position = 800
             p.setFont("Helvetica-Bold", 16)
             p.drawString(100, y_position, "АВТОМАТИЧЕСКИЙ РЕФЕРАТ ДОКУМЕНТА")
             y_position -= 40
 
+            # Семантический реферат
             p.setFont("Helvetica-Bold", 12)
-            p.drawString(100, y_position, "Классический реферат:")
-            y_position -= 20
+            p.drawString(100, y_position, "Семантический реферат (AI):")
+            y_position -= 25
 
             p.setFont("Helvetica", 10)
-            # Добавляем текст реферата
-            summary_text = classic_summary
-            words = summary_text.split()
-            line = ""
-            for word in words:
-                test_line = line + word + " "
-                if len(test_line) > 80:  # Примерная ширина строки
+            semantic_sentences = split_summary_into_lines(semantic_summary)
+            for sentence in semantic_sentences:
+                bullet_text = f"• {sentence}"
+                words = bullet_text.split()
+                line = ""
+                for word in words:
+                    test_line = line + word + " "
+                    if len(test_line) > 80:
+                        p.drawString(100, y_position, line)
+                        y_position -= 15
+                        line = word + " "
+                        if y_position < 50:
+                            p.showPage()
+                            y_position = 800
+                            p.setFont("Helvetica", 10)
+                    else:
+                        line = test_line
+
+                if line:
                     p.drawString(100, y_position, line)
-                    y_position -= 15
-                    line = word + " "
-                    if y_position < 50:  # Новая страница
-                        p.showPage()
-                        y_position = 800
-                        p.setFont("Helvetica", 10)
-                else:
-                    line = test_line
+                    y_position -= 20
 
-            if line:
-                p.drawString(100, y_position, line)
-                y_position -= 30
+                if y_position < 100:
+                    p.showPage()
+                    y_position = 800
+                    p.setFont("Helvetica", 10)
 
+            y_position -= 20
+
+            # Классический реферат
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(100, y_position, "Классический реферат:")
+            y_position -= 25
+
+            p.setFont("Helvetica", 10)
+            classic_sentences = split_summary_into_lines(classic_summary)
+            for sentence in classic_sentences:
+                bullet_text = f"• {sentence}"
+                words = bullet_text.split()
+                line = ""
+                for word in words:
+                    test_line = line + word + " "
+                    if len(test_line) > 80:
+                        p.drawString(100, y_position, line)
+                        y_position -= 15
+                        line = word + " "
+                        if y_position < 50:
+                            p.showPage()
+                            y_position = 800
+                            p.setFont("Helvetica", 10)
+                    else:
+                        line = test_line
+
+                if line:
+                    p.drawString(100, y_position, line)
+                    y_position -= 20
+
+                if y_position < 100:
+                    p.showPage()
+                    y_position = 800
+                    p.setFont("Helvetica", 10)
+
+            y_position -= 20
+
+            # Ключевые слова
             p.setFont("Helvetica-Bold", 12)
             p.drawString(100, y_position, "Ключевые слова:")
             y_position -= 20
 
             p.setFont("Helvetica", 10)
-            keywords = eval(request.args.get('keywords', '[]'))
-            keyword_text = ", ".join(keywords[:10])  # Берем первые 10 ключевых слов
+            semantic_keywords_text = "Семантические: " + ", ".join(semantic_keywords[:10])
+            classic_keywords_text = "Статистические: " + ", ".join(keyword_summary[:10])
 
-            # Обрабатываем ключевые слова
-            words = keyword_text.split()
+            # Обрабатываем семантические ключевые слова
+            words = semantic_keywords_text.split()
             line = ""
             for word in words:
                 test_line = line + word + " "
@@ -377,6 +583,33 @@ def download_summary(format_type):
 
             if line:
                 p.drawString(100, y_position, line)
+                y_position -= 15
+
+            # Обрабатываем статистические ключевые слова
+            words = classic_keywords_text.split()
+            line = ""
+            for word in words:
+                test_line = line + word + " "
+                if len(test_line) > 80:
+                    p.drawString(100, y_position, line)
+                    y_position -= 15
+                    line = word + " "
+                    if y_position < 50:
+                        p.showPage()
+                        y_position = 800
+                        p.setFont("Helvetica", 10)
+                else:
+                    line = test_line
+
+            if line:
+                p.drawString(100, y_position, line)
+
+            # Добавляем информацию о модели
+            y_position -= 30
+            p.setFont("Helvetica-Oblique", 8)
+            p.drawString(100, y_position, f"Сгенерировано: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            y_position -= 12
+            p.drawString(100, y_position, "Использована модель: Llama 3.2 через Ollama")
 
             p.showPage()
             p.save()
@@ -398,4 +631,4 @@ def download_summary(format_type):
 
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, threaded=True)

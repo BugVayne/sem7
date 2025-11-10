@@ -1,145 +1,131 @@
-<!-- templates/history.html -->
-<!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>История реферирования</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .history-table {
-            font-size: 0.9rem;
-        }
-        .compression-good {
-            color: #198754;
-            font-weight: bold;
-        }
-        .compression-average {
-            color: #fd7e14;
-            font-weight: bold;
-        }
-        .compression-poor {
-            color: #dc3545;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="container py-5">
-        <div class="row">
-            <div class="col-12">
-                <div class="d-flex justify-content-between align-items-center mb-4">
-                    <h1>📋 История реферирования</h1>
-                    <div>
-                        <a href="{{ url_for('index') }}" class="btn btn-outline-primary me-2">
-                            ← На главную
-                        </a>
-                        <form action="{{ url_for('clear_history') }}" method="post" style="display: inline;">
-                            <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Вы уверены, что хотите очистить историю?')">
-                                🗑️ Очистить историю
-                            </button>
-                        </form>
-                    </div>
-                </div>
+{% extends "base.html" %}
 
-                {% if history %}
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Последние обработанные документы</h5>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="table-responsive">
-                            <table class="table table-hover mb-0 history-table">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Файл</th>
-                                        <th>Дата обработки</th>
-                                        <th>Язык</th>
-                                        <th>Исходный размер</th>
-                                        <th>Реферат</th>
-                                        <th>Сжатие</th>
-                                        <th>Ключевые слова</th>
-                                        <th>Действия</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for item in history|reverse %}
-                                    <tr>
-                                        <td><strong>#{{ item.id }}</strong></td>
-                                        <td>
-                                            <span title="{{ item.filename }}">
-                                                {{ item.filename[:20] }}{% if item.filename|length > 20 %}...{% endif %}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {% if item.timestamp %}
-                                                {{ item.timestamp[:10] }}<br>
-                                                <small class="text-muted">{{ item.timestamp[11:16] }}</small>
-                                            {% else %}
-                                                <span class="text-muted">Неизвестно</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if item.language == 'ru' %}
-                                                <span class="badge bg-primary">Русский</span>
-                                            {% else %}
-                                                <span class="badge bg-success">Английский</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ item.original_length }} симв.</td>
-                                        <td>
-                                            <span title="{{ item.classic_summary_preview }}">
-                                                {{ item.classic_summary_preview[:50] }}{% if item.classic_summary_preview|length > 50 %}...{% endif %}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {% set ratio = item.compression_ratio %}
-                                            {% if ratio > 70 %}
-                                                <span class="compression-good">{{ ratio }}%</span>
-                                            {% elif ratio > 40 %}
-                                                <span class="compression-average">{{ ratio }}%</span>
-                                            {% else %}
-                                                <span class="compression-poor">{{ ratio }}%</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ item.keyword_count }} слов</td>
-                                        <td>
-                                            <div class="btn-group btn-group-sm">
-                                                <a href="{{ url_for('view_history_item', history_id=item.id) }}"
-                                                   class="btn btn-outline-primary" title="Просмотреть">
-                                                    👁️
-                                                </a>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+{% block title %}История реферирования{% endblock %}
 
-                <div class="mt-3 text-muted">
-                    <small>Показано {{ history|length }} записей. История ограничена 50 последними документами.</small>
-                </div>
-
-                {% else %}
-                <div class="text-center py-5">
-                    <div class="mb-4">
-                        <i style="font-size: 4rem;">📝</i>
-                    </div>
-                    <h3>История пуста</h3>
-                    <p class="text-muted mb-4">Здесь будут отображаться обработанные документы</p>
-                    <a href="{{ url_for('index') }}" class="btn btn-primary">
-                        🚀 Обработать первый документ
-                    </a>
-                </div>
-                {% endif %}
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <!-- Заголовок и действия -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h2 mb-1"><i class="bi bi-clock-history me-2"></i>История реферирования</h1>
+                <p class="text-muted">Ранее обработанные документы</p>
+            </div>
+            <div class="btn-group">
+                <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left me-1"></i>На главную
+                </a>
+                <form action="{{ url_for('clear_history') }}" method="post" class="d-inline">
+                    <button type="submit" class="btn btn-outline-danger" 
+                            onclick="return confirm('Вы уверены, что хотите очистить всю историю?')">
+                        <i class="bi bi-trash me-1"></i>Очистить историю
+                    </button>
+                </form>
             </div>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+        {% if history %}
+        <!-- Таблица истории -->
+        <div class="card border-0 shadow-sm">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-list-ul me-2"></i>Последние обработанные документы</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>Файл</th>
+                                <th>Дата обработки</th>
+                                <th>Язык</th>
+                                <th>Размер</th>
+                                <th>Реферат</th>
+                                <th>Сжатие</th>
+                                <th>Ключевые слова</th>
+                                <th>Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in history %}
+                            <tr>
+                                <td><strong>#{{ item.id }}</strong></td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-text text-muted me-2"></i>
+                                        <span title="{{ item.filename }}">
+                                            {{ item.filename[:25] }}{% if item.filename|length > 25 %}...{% endif %}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if item.timestamp %}
+                                        <small class="text-nowrap">{{ item.timestamp[:10] }}</small>
+                                        <br>
+                                        <small class="text-muted">{{ item.timestamp[11:16] }}</small>
+                                    {% else %}
+                                        <span class="text-muted">Неизвестно</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.language == 'ru' %}
+                                        <span class="badge bg-primary">Русский</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Английский</span>
+                                    {% endif %}
+                                </td>
+                                <td>{{ item.original_length }} симв.</td>
+                                <td>
+                                    <span class="d-inline-block text-truncate" style="max-width: 200px;" 
+                                          title="{{ item.classic_summary_preview }}">
+                                        {{ item.classic_summary_preview }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% set ratio = item.compression_ratio %}
+                                    {% if ratio > 70 %}
+                                        <span class="badge bg-success">{{ ratio }}%</span>
+                                    {% elif ratio > 40 %}
+                                        <span class="badge bg-warning">{{ ratio }}%</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">{{ ratio }}%</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ item.keyword_count }}</span>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('view_history_item', history_id=item.id) }}"
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="Просмотреть результаты">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="mt-3 text-muted">
+            <small><i class="bi bi-info-circle me-1"></i>Показано {{ history|length }} записей. История ограничена 50 последними документами.</small>
+        </div>
+
+        {% else %}
+        <!-- Сообщение пустой истории -->
+        <div class="text-center py-5">
+            <div class="mb-4">
+                <i class="bi bi-clock-history" style="font-size: 4rem; color: #6c757d;"></i>
+            </div>
+            <h3 class="text-muted">История пуста</h3>
+            <p class="text-muted mb-4">Здесь будут отображаться все обработанные документы</p>
+            <a href="{{ url_for('index') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-plus-circle me-2"></i>Обработать первый документ
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

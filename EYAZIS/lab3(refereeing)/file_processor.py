@@ -69,15 +69,12 @@ def clean_text(text, language):
     """
     Очищает текст от лишних пробелов и форматирования
     """
-    # Удаляем множественные пробелы и переносы
+
     text = re.sub(r'\s+', ' ', text)
 
-    # Удаляем специальные символы, но сохраняем пунктуацию
     if language == 'ru':
-        # Сохраняем русскую пунктуацию
         text = re.sub(r'[^\w\sа-яА-ЯёЁ\-.,!?;:()]', '', text)
     else:
-        # Сохраняем английскую пунктуацию
         text = re.sub(r'[^\w\s\-.,!?;:()]', '', text)
 
     return text.strip()
@@ -87,12 +84,9 @@ def split_into_sentences(text, language):
     """
     Разбивает текст на предложения
     """
-    # Простая реализация через регулярные выражения
     if language == 'ru':
-        # Для русского языка
         sentences = re.split(r'(?<=[.!?])\s+', text)
     else:
-        # Для английского языка
         sentences = re.split(r'(?<=[.!?])\s+', text)
 
     return [s.strip() for s in sentences if s.strip()]
