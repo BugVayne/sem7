@@ -1,14 +1,10 @@
-# app.py (updated routes)
-from flask import Flask, render_template, request, jsonify, flash, send_file
-import os
-import nltk
+from flask import Flask, render_template, request, jsonify, flash
 from nltk.tokenize import sent_tokenize
 from translation_engine import AdvancedTranslator
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key-here'
 
-# Initialize translator
 translator = AdvancedTranslator()
 
 @app.route('/')
@@ -28,20 +24,14 @@ def translate():
         return render_template('index.html')
 
     try:
-        # Perform translation
         translation_result = translator.translate_with_stats(english_text)
 
         if translation_result.get('error'):
             flash(f'Translation error: {translation_result["translation"]}', 'danger')
             return render_template('index.html')
 
-        # Get grammatical information
         grammatical_info = translator.get_grammatical_info(english_text)
-
-        # Get frequency list
         frequency_list = translator.get_frequency_list(english_text, grammatical_info)
-
-        # Split into sentences for syntax tree selection
         sentences = sent_tokenize(english_text)
 
         return render_template('index.html',
@@ -64,10 +54,7 @@ def syntax_tree():
         return render_template('index.html')
 
     try:
-        # Get syntax tree as image data or HTML
         syntax_tree_result = translator.get_syntax_tree(selected_sentence)
-
-        # Get previous results to maintain state
         translation_result = translator.translate_with_stats(english_text)
         grammatical_info = translator.get_grammatical_info(english_text)
         frequency_list = translator.get_frequency_list(english_text, grammatical_info)
@@ -85,8 +72,6 @@ def syntax_tree():
         flash(f'Error generating syntax tree: {str(e)}', 'danger')
         return render_template('index.html')
 
-# ... rest of the Flask routes remain the same ...
-
 @app.route('/save_results', methods=['POST'])
 def save_results():
     english_text = request.form.get('english_text', '').strip()
@@ -96,24 +81,19 @@ def save_results():
         return render_template('index.html')
 
     try:
-        # Get all translation data
         translation_result = translator.translate_with_stats(english_text)
         grammatical_info = translator.get_grammatical_info(english_text)
         frequency_list = translator.get_frequency_list(english_text, grammatical_info)
 
-        # Combine all data
         full_data = {
             **translation_result,
             'grammatical_info': grammatical_info,
             'frequency_list': frequency_list
         }
 
-        # Save to file
         filename = translator.save_to_file(full_data)
-
         flash(f'Results saved to {filename}', 'success')
 
-        # Return to maintain state
         sentences = sent_tokenize(english_text)
         return render_template('index.html',
                                translation_result=translation_result,
@@ -125,7 +105,6 @@ def save_results():
         flash(f'Error saving results: {str(e)}', 'danger')
         return render_template('index.html')
 
-
 @app.route('/print_results', methods=['POST'])
 def print_results():
     english_text = request.form.get('english_text', '').strip()
@@ -134,7 +113,6 @@ def print_results():
         return "No text to print", 400
 
     try:
-        # Create a printable version
         translation_result = translator.translate_with_stats(english_text)
         grammatical_info = translator.get_grammatical_info(english_text)
         frequency_list = translator.get_frequency_list(english_text, grammatical_info)
@@ -147,10 +125,8 @@ def print_results():
     except Exception as e:
         return f"Error generating printable version: {str(e)}", 500
 
-
 @app.route('/api/translate', methods=['POST'])
 def api_translate():
-    """API endpoint for translation"""
     data = request.get_json()
     english_text = data.get('text', '').strip()
 
@@ -173,7 +149,6 @@ def api_translate():
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

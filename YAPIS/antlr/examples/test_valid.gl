@@ -1,0 +1,22 @@
+// Тест: Корректный код
+graph g;
+node n1;
+node n2;
+int weight;
+bool pathExists;
+
+g = create_graph();
+n1 = add_node(g, "Start");
+n2 = add_node(g, "End");
+
+weight = 0;
+// Пример цикла
+until (weight > 5) {
+    weight = weight + 1;
+}
+
+// Пример условия
+if (weight >= 5) then {
+    pathExists = true;
+    write("Ready");
+}

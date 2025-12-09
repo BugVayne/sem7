@@ -1,0 +1,20 @@
+// Ошибки типов (Семантика)
+int number;
+bool flag;
+graph g;
+
+number = 10;
+
+// Ошибка 1: Присвоение строки в переменную int
+number = "Hello World";
+
+flag = true;
+
+// Ошибка 2: Сложение числа и булева значения
+number = number + flag;
+
+// Ошибка 3: Условие if должно быть bool, а тут граф
+g = create_graph();
+if (g) then {
+    write("Bad condition");
+}

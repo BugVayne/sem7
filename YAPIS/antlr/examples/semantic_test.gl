@@ -1,0 +1,24 @@
+// semantic_test.gl
+
+graph g;
+int count;
+bool flag;
+
+count = 10;
+// Ошибка 1: Нельзя присвоить строку в int
+count = "some string"; 
+
+// Ошибка 2: Использование необъявленной переменной
+unknown_var = 5;
+
+if (count > 0) then {
+    int localVal;
+    localVal = 1;
+}
+
+// Ошибка 3: localVal не видна здесь (выход за пределы блока)
+count = localVal;
+
+// Ошибка 4: Сложение несовместимых типов (bool + int)
+flag = true;
+count = flag + 10;

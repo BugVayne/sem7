@@ -1,0 +1,16 @@
+// Ошибки области видимости (Scope)
+int globalVar;
+globalVar = 100;
+
+if (globalVar > 50) then {
+    int localVar;
+    localVar = 1;
+    // Здесь localVar видна
+    globalVar = globalVar + localVar;
+}
+
+// Ошибка 1: localVar удалена из памяти после выхода из блока {}
+globalVar = localVar;
+
+// Ошибка 2: Присвоение вообще несуществующей переменной
+unknownVar = 55;
