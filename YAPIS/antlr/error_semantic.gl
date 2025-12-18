@@ -1,0 +1,14 @@
+graph g;
+g = create_graph();
+
+int val;
+val = 50;
+
+// ERROR: Cannot assign String to Int
+val = "This is a string";
+
+// ERROR: add_node expects (graph, string), not (graph, int)
+node n;
+n = add_node(g, 999);
+
+println("This should not print due to type errors.");

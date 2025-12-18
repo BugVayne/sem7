@@ -1,0 +1,18 @@
+int counter;
+counter = 0;
+
+println("Starting countdown...");
+
+until (counter == 4) {
+    counter = counter + 1;
+    
+    switch (counter) {
+        case 1: println("   1: First step");
+        case 2: println("   2: Second step");
+        case 3: println("   3: Almost there");
+        case 4: println("   4: Finish!");
+        default: println("   Unknown step");
+    }
+}
+
+println("Logic test finished.");

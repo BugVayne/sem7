@@ -1,21 +1,62 @@
-// Файл: GraphLangSemanticAnalyzer.java
 import org.antlr.v4.runtime.tree.ParseTree;
 import java.util.*;
 
 public class GraphLangSemanticAnalyzer extends GraphLangBaseVisitor<String> {
 
     private final Stack<Map<String, String>> scopes = new Stack<>();
-    private final Map<String, String> functions = new HashMap<>();
+    private final Map<String, FunctionInfo> functions = new HashMap<>();
     private final List<String> errors = new ArrayList<>();
+
+    private static class FunctionInfo {
+        String returnType;
+        List<String> paramTypes;
+        
+        FunctionInfo(String returnType, List<String> paramTypes) {
+            this.returnType = returnType;
+            this.paramTypes = paramTypes;
+        }
+    }
 
     public GraphLangSemanticAnalyzer() {
         scopes.push(new HashMap<>());
-        // Стандартные функции
-        functions.put("create_graph", "graph");
-        functions.put("add_node", "node");
-        functions.put("write", "void");
-        functions.put("print", "void");
-        functions.put("check_path", "bool");
+        
+        // Добавляем ВСЕ стандартные функции, которые есть в кодогенераторе
+        defineStandardFunctions();
+    }
+
+    private void defineStandardFunctions() {
+        // Графовые операции
+        functions.put("create_graph", new FunctionInfo("graph", Arrays.asList()));
+        functions.put("add_node", new FunctionInfo("node", Arrays.asList("graph", "string")));
+        functions.put("add_arc", new FunctionInfo("arc", Arrays.asList("graph", "node", "node", "int")));
+        functions.put("remove_node", new FunctionInfo("bool", Arrays.asList("graph", "node")));
+        functions.put("remove_arc", new FunctionInfo("bool", Arrays.asList("graph", "arc")));
+        
+        // Операции с графами
+        functions.put("get_nodes", new FunctionInfo("list<node>", Arrays.asList("graph")));
+        functions.put("get_arcs", new FunctionInfo("list<arc>", Arrays.asList("graph")));
+        functions.put("find_path", new FunctionInfo("list<node>", Arrays.asList("graph", "node", "node")));
+        functions.put("is_connected", new FunctionInfo("bool", Arrays.asList("graph", "node", "node")));
+        
+        // Ввод-вывод
+        functions.put("write", new FunctionInfo("void", Arrays.asList("string")));
+        functions.put("print", new FunctionInfo("void", Arrays.asList("string")));
+        functions.put("println", new FunctionInfo("void", Arrays.asList("string")));
+        functions.put("read_line", new FunctionInfo("string", Arrays.asList()));
+        functions.put("read_int", new FunctionInfo("int", Arrays.asList()));
+        
+        // Математические функции
+        functions.put("abs", new FunctionInfo("int", Arrays.asList("int")));
+        functions.put("sqrt", new FunctionInfo("float", Arrays.asList("float")));
+        functions.put("pow", new FunctionInfo("float", Arrays.asList("float", "float")));
+        
+        // Операции со списками
+        functions.put("create_list", new FunctionInfo("list", Arrays.asList()));
+        functions.put("add_to_list", new FunctionInfo("void", Arrays.asList("list", "object")));
+        functions.put("get_from_list", new FunctionInfo("object", Arrays.asList("list", "int")));
+        
+        // Старые функции для обратной совместимости
+        functions.put("check_path", new FunctionInfo("bool", Arrays.asList("graph", "node", "node")));
     }
 
     public List<String> getErrors() { return errors; }
@@ -73,7 +114,6 @@ public class GraphLangSemanticAnalyzer extends GraphLangBaseVisitor<String> {
         if (condType != null && !condType.equals("bool")) {
             errors.add("Ошибка: Условие if должно быть bool, получено: " + condType);
         }
-        // Важно: вызываем visit явно для блоков, чтобы сработал visitBlock и создались области видимости
         for (GraphLangParser.BlockContext b : ctx.block()) {
             visit(b);
         }
@@ -106,7 +146,6 @@ public class GraphLangSemanticAnalyzer extends GraphLangBaseVisitor<String> {
         if (ctx.literal().FLOAT_LIT() != null) return "float";
         if (ctx.literal().STRING_LIT() != null) return "string";
         if (ctx.literal().NULL() != null) return "null";
-        // --- ИЗМЕНЕНИЕ ЗДЕСЬ: Поддержка bool ---
         if (ctx.literal().BOOL_LIT() != null) return "bool"; 
         return "unknown";
     }
@@ -134,12 +173,30 @@ public class GraphLangSemanticAnalyzer extends GraphLangBaseVisitor<String> {
     @Override
     public String visitFuncCallExpr(GraphLangParser.FuncCallExprContext ctx) {
         String name = ctx.ID().getText();
-        if (functions.containsKey(name)) {
+        FunctionInfo funcInfo = functions.get(name);
+        
+        if (funcInfo != null) {
+            // Проверяем количество аргументов
+            List<String> argTypes = new ArrayList<>();
             if (ctx.arg_list() != null) {
-                for (GraphLangParser.ExprContext e : ctx.arg_list().expr()) visit(e);
+                for (GraphLangParser.ExprContext e : ctx.arg_list().expr()) {
+                    argTypes.add(visit(e));
+                }
+                
+                // Простая проверка количества аргументов
+                if (argTypes.size() != funcInfo.paramTypes.size()) {
+                    errors.add("Ошибка: Функция '" + name + "' ожидает " + funcInfo.paramTypes.size() + 
+                              " аргументов, получено " + argTypes.size());
+                }
+            } else {
+                if (!funcInfo.paramTypes.isEmpty()) {
+                    errors.add("Ошибка: Функция '" + name + "' ожидает " + funcInfo.paramTypes.size() + 
+                              " аргументов, получено 0");
+                }
             }
-            return functions.get(name);
+            return funcInfo.returnType;
         }
+        
         errors.add("Ошибка: Неизвестная функция '" + name + "'");
         return "unknown";
     }
@@ -147,7 +204,11 @@ public class GraphLangSemanticAnalyzer extends GraphLangBaseVisitor<String> {
     private boolean typesCompatible(String target, String source) {
         if (target.equals(source)) return true;
         if (target.equals("float") && source.equals("int")) return true;
-        if (source.equals("null") && (target.equals("graph") || target.equals("node"))) return true;
+        if (source.equals("null") && (target.equals("graph") || target.equals("node") || 
+                                      target.equals("arc") || target.equals("list"))) return true;
+        // Для generic типов
+        if (target.startsWith("list<") && source.equals("list")) return true;
+        if (source.startsWith("list<") && target.equals("list")) return true;
         // Особый случай для unknown, чтобы не спамить ошибками
         if (target.equals("unknown") || source.equals("unknown")) return true;
         return false;

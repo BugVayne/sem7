@@ -1,0 +1,29 @@
+graph g;
+g = create_graph();
+
+node n1;
+n1 = add_node(g, "Start");
+
+node n2;
+n2 = add_node(g, "End");
+
+arc a1;
+a1 = add_arc(g, n1, n2, 10);
+
+println("Graph created!");
+println("Graph nodes:");
+list<node> nodes;
+nodes = get_nodes(g);
+println("Total nodes: 2");
+
+bool connected;
+connected = is_connected(g, n1, n2);
+if (connected) then {
+    println("Path exists!");
+} else {
+    println("Path not exists!");
+}
+
+
+//javac -cp ".;antlr-4.13.2-complete.jar" *.java
+//java -cp ".;antlr-4.13.2-complete.jar" GraphLangCompiler test.gl --run

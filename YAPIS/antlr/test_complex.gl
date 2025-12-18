@@ -1,0 +1,99 @@
+// --- Graph Language Feature Test ---
+println(">> PROGRAM START");
+
+// 1. Setup Graph
+graph g;
+g = create_graph();
+println(">> Graph initialized.");
+
+// 2. Add Nodes
+println(">> Step 1: Adding Nodes...");
+node nStart;
+nStart = add_node(g, "StartNode");
+
+node nMiddle;
+nMiddle = add_node(g, "MiddleNode");
+
+node nEnd;
+nEnd = add_node(g, "EndNode");
+
+node nIsolated;
+nIsolated = add_node(g, "IsolatedNode");
+println("   [OK] 4 Nodes added (Start, Middle, End, Isolated).");
+
+// 3. Add Arcs (Creating a path: Start -> Middle -> End)
+println(">> Step 2: Creating Arcs...");
+
+arc a1;
+a1 = add_arc(g, nStart, nMiddle, 5);
+println("   [OK] Arc created: Start -> Middle (weight 5)");
+
+arc a2;
+a2 = add_arc(g, nMiddle, nEnd, 10);
+println("   [OK] Arc created: Middle -> End (weight 10)");
+
+// 4. Test Connectivity (IF / ELSE Logic)
+println(">> Step 3: Testing Connectivity...");
+
+bool path_exists;
+path_exists = is_connected(g, nStart, nEnd);
+
+if (path_exists) then {
+    println("   [SUCCESS] Path found from Start to End.");
+} else {
+    println("   [FAILURE] Logic error: Path should exist!");
+}
+
+bool iso_connected;
+iso_connected = is_connected(g, nStart, nIsolated);
+
+// Test NOT operator (!)
+if (!iso_connected) then {
+    println("   [SUCCESS] IsolatedNode is correctly disconnected.");
+} else {
+    println("   [FAILURE] Logic error: IsolatedNode shouldn't be connected!");
+}
+
+// 5. Arithmetic Logic (Calculating total weight manually)
+println(">> Step 4: Calculating Path Weight...");
+int w1; w1 = 5;
+int w2; w2 = 10;
+int total_weight;
+total_weight = w1 + w2;
+
+// Check weight threshold
+if (total_weight > 12) then {
+    println("   [INFO] Path is heavy (Weight > 12).");
+} else {
+    println("   [INFO] Path is light.");
+}
+
+// 6. Loop Test (UNTIL)
+println(">> Step 5: Traversing Graph (Simulation loop)...");
+int hop_count;
+hop_count = 0;
+
+// Loop until we simulated 2 hops
+until (hop_count == 2) {
+    hop_count = hop_count + 1;
+    if (hop_count == 1) then {
+        println("   -> Hopping to MiddleNode...");
+    } else {
+        println("   -> Hopping to EndNode...");
+    }
+}
+
+// 7. Switch Case Test
+println(">> Step 6: Checking Hop Count Status...");
+switch (hop_count) {
+    case 0:
+        println("   [ERR] No hops made.");
+    case 1:
+        println("   [ERR] Stuck at middle.");
+    case 2:
+        println("   [OK] Reached destination exactly.");
+    default:
+        println("   [ERR] Overshot destination.");
+}
+
+println(">> PROGRAM END");

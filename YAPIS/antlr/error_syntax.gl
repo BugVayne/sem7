@@ -1,0 +1,12 @@
+graph g;
+g = create_graph();
+
+println("This line is fine.");
+
+// ERROR: Missing semicolon
+int number = 100 
+
+// ERROR: Missing 'then' keyword
+if (number > 50) {
+    println("Syntax error should happen before this prints.");
+}

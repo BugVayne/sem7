@@ -6,9 +6,15 @@
 /EYAZIS/lab2(language_detection)/__pycache__/
 /EYAZIS/lab2(language_detection)/results/
 /EYAZIS/lab2(language_detection)/uploads/
-
 /EYAZIS/lab2(language_detection)/trained_model.pth
 /EYAZIS/lab2(language_detection)/vocabulary.pkl
 /EYAZIS/lab2(language_detection)/history.json
 
+
+/EYAZIS/lab3(refereeing)/__pycache__/
+/EYAZIS/lab4(machine_translate)/__pycache__/
+
 /ChatGame/
+
+/masha/
+/EYAZIS/lab4(machine_translate)/translation_cache.db
